@@ -16,6 +16,8 @@
 #include <QLibraryInfo>
 #include <QDir>
 #include <QStandardPaths>
+#include <QCursor>
+#include <QScreen>
 
 #include "airpods_packets.h"
 #include "logger.h"
@@ -44,14 +46,15 @@ class AirPodsTrayApp : public QObject {
     Q_PROPERTY(bool notificationsEnabled READ notificationsEnabled WRITE setNotificationsEnabled NOTIFY notificationsEnabledChanged)
     Q_PROPERTY(int retryAttempts READ retryAttempts WRITE setRetryAttempts NOTIFY retryAttemptsChanged)
     Q_PROPERTY(bool hideOnStart READ hideOnStart CONSTANT)
+    Q_PROPERTY(bool panelMode READ panelMode CONSTANT)
     Q_PROPERTY(DeviceInfo *deviceInfo READ deviceInfo CONSTANT)
     Q_PROPERTY(QString phoneMacStatus READ phoneMacStatus NOTIFY phoneMacStatusChanged)
     Q_PROPERTY(bool hearingAidEnabled READ hearingAidEnabled WRITE setHearingAidEnabled NOTIFY hearingAidEnabledChanged)
 
 public:
-    AirPodsTrayApp(bool debugMode, bool hideOnStart, QQmlApplicationEngine *parent = nullptr)
+    AirPodsTrayApp(bool debugMode, bool hideOnStart, bool panelMode, QQmlApplicationEngine *parent = nullptr)
         : QObject(parent), debugMode(debugMode), m_settings(new QSettings("AirPodsTrayApp", "AirPodsTrayApp"))
-        , m_autoStartManager(new AutoStartManager(this)), m_hideOnStart(hideOnStart), parent(parent)
+        , m_autoStartManager(new AutoStartManager(this)), m_hideOnStart(hideOnStart), m_panelMode(panelMode), parent(parent)
         , m_deviceInfo(new DeviceInfo(this)), m_bleManager(new BleManager(this))
         , m_systemSleepMonitor(new SystemSleepMonitor(this))
     {
@@ -134,6 +137,7 @@ public:
     void setNotificationsEnabled(bool enabled) { trayManager->setNotificationsEnabled(enabled); }
     int retryAttempts() const { return m_retryAttempts; }
     bool hideOnStart() const { return m_hideOnStart; }
+    bool panelMode() const { return m_panelMode; }
     DeviceInfo *deviceInfo() const { return m_deviceInfo; }
     QString phoneMacStatus() const { return m_phoneMacStatus; }
     bool hearingAidEnabled() const { return m_deviceInfo->hearingAidEnabled(); }
@@ -444,14 +448,24 @@ public slots:
 private slots:
     void onTrayIconActivated()
     {
-        QQuickWindow *window = qobject_cast<QQuickWindow *>(
-            QGuiApplication::topLevelWindows().constFirst());
-        if (window)
-        {
-            window->show();
-            window->raise();
-            window->requestActivate();
+        QQuickWindow *window = mainWindow();
+        if (!window) {
+            return;
         }
+
+        if (m_panelMode) {
+            if (window->isVisible()) {
+                window->hide();
+                return;
+            }
+
+            showPanelPopup(window);
+            return;
+        }
+
+        window->show();
+        window->raise();
+        window->requestActivate();
     }
 
     void onOpenApp()
@@ -971,6 +985,56 @@ signals:
     void hearingAidEnabledChanged(bool enabled);
 
 private:
+    QQuickWindow *mainWindow() const
+    {
+        if (!parent || parent->rootObjects().isEmpty()) {
+            return nullptr;
+        }
+        return qobject_cast<QQuickWindow *>(parent->rootObjects().first());
+    }
+
+    void showPanelPopup(QQuickWindow *window)
+    {
+        if (!window) {
+            return;
+        }
+
+        const QPoint cursorPos = QCursor::pos();
+        QScreen *screen = QGuiApplication::screenAt(cursorPos);
+        if (!screen) {
+            screen = QGuiApplication::primaryScreen();
+        }
+
+        if (!screen) {
+            window->show();
+            window->raise();
+            window->requestActivate();
+            return;
+        }
+
+        const QRect available = screen->availableGeometry();
+        const int margin = 8;
+        const int x = qBound(
+            available.left() + margin,
+            cursorPos.x() - (window->width() / 2),
+            (available.right() - window->width()) - margin + 1);
+
+        int y = cursorPos.y() - window->height() - margin;
+        if (y < available.top() + margin) {
+            y = cursorPos.y() + margin;
+        }
+        y = qBound(
+            available.top() + margin,
+            y,
+            (available.bottom() - window->height()) - margin + 1);
+
+        window->setX(x);
+        window->setY(y);
+        window->show();
+        window->raise();
+        window->requestActivate();
+    }
+
     QBluetoothSocket *socket = nullptr;
     QBluetoothSocket *phoneSocket = nullptr;
     QByteArray lastBatteryStatus;
@@ -982,6 +1046,7 @@ private:
     AutoStartManager *m_autoStartManager;
     int m_retryAttempts = 3;
     bool m_hideOnStart = false;
+    bool m_panelMode = false;
     DeviceInfo *m_deviceInfo;
     BleManager *m_bleManager;
     SystemSleepMonitor *m_systemSleepMonitor = nullptr;
@@ -1034,18 +1099,22 @@ int main(int argc, char *argv[]) {
 
     bool debugMode = false;
     bool hideOnStart = false;
+    bool panelMode = false;
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--debug")
             debugMode = true;
 
         if (QString(argv[i]) == "--hide")
             hideOnStart = true;
+
+        if (QString(argv[i]) == "--panel")
+            panelMode = true;
     }
 
     QQmlApplicationEngine engine;
     qmlRegisterType<Battery>("me.kavishdevar.Battery", 1, 0, "Battery");
     qmlRegisterType<DeviceInfo>("me.kavishdevar.DeviceInfo", 1, 0, "DeviceInfo");
-    AirPodsTrayApp *trayApp = new AirPodsTrayApp(debugMode, hideOnStart, &engine);
+    AirPodsTrayApp *trayApp = new AirPodsTrayApp(debugMode, hideOnStart, panelMode, &engine);
     engine.rootContext()->setContextProperty("airPodsTrayApp", trayApp);
 
     // Expose PHONE_MAC_ADDRESS environment variable to QML for placeholder in settings

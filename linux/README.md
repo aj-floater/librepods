@@ -85,6 +85,12 @@ A native Linux application to control your AirPods, with support for:
    ./librepods
    ```
 
+   KDE-like tray popup mode:
+
+   ```bash
+   ./librepods --panel
+   ```
+
 ## Troubleshooting
 
 ### Media Controls (Play/Pause/Skip) Not Working

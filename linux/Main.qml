@@ -5,13 +5,19 @@ import QtQuick.Controls 2.15
 
 ApplicationWindow {
     id: mainWindow
-    visible: !airPodsTrayApp.hideOnStart
-    width: 400
-    height: 300
+    visible: !airPodsTrayApp.hideOnStart && !airPodsTrayApp.panelMode
+    width: airPodsTrayApp.panelMode ? 420 : 400
+    height: airPodsTrayApp.panelMode ? 360 : 300
     title: "LibrePods"
     objectName: "mainWindowObject"
+    flags: airPodsTrayApp.panelMode ? (Qt.Popup | Qt.FramelessWindowHint) : Qt.Window
 
     onClosing: mainWindow.visible = false
+    onActiveChanged: {
+        if (airPodsTrayApp.panelMode && !active && visible) {
+            visible = false
+        }
+    }
 
     function reopen(pageToLoad) {
         if (pageToLoad == "settings")
