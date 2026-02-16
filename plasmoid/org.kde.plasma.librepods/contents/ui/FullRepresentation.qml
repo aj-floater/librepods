@@ -14,7 +14,9 @@ PlasmaExtras.Representation {
     id: root
 
     required property PlasmoidItem plasmoidItem
+
     property int selectedNoiseControlMode: -1
+    property int currentTab: 0
 
     function batteryDisplay(level, charging) {
         const numeric = Number(level)
@@ -33,14 +35,18 @@ PlasmaExtras.Representation {
         selectedNoiseControlMode = Number.isFinite(mode) ? mode : 0
     }
 
+    function openSettingsTab() {
+        currentTab = 1
+    }
+
     implicitWidth: Kirigami.Units.gridUnit * 24
     implicitHeight: Math.max(
         Kirigami.Units.gridUnit * 10,
-        (headerBar ? headerBar.implicitHeight : 0) + (stackView.currentItem ? stackView.currentItem.implicitHeight : 0))
+        (headerBar ? headerBar.implicitHeight : 0) + (contentContainer ? contentContainer.implicitHeight : 0))
     Layout.minimumWidth: Kirigami.Units.gridUnit * 22
     Layout.maximumWidth: Kirigami.Units.gridUnit * 28
     Layout.minimumHeight: Kirigami.Units.gridUnit * 10
-    Layout.maximumHeight: Kirigami.Units.gridUnit * 24
+    Layout.maximumHeight: implicitHeight
     focus: true
     collapseMarginsHint: true
 
@@ -61,25 +67,15 @@ PlasmaExtras.Representation {
         contentItem: RowLayout {
             spacing: Kirigami.Units.smallSpacing
 
-            PlasmaComponents3.ToolButton {
-                visible: stackView.depth > 1
-                icon.name: "go-previous-symbolic"
-                display: PlasmaComponents3.AbstractButton.IconOnly
-                onClicked: stackView.pop()
-                PlasmaComponents3.ToolTip {
-                    text: i18n("Back")
-                }
-            }
-
             PlasmaComponents3.Label {
-                text: stackView.depth > 1 ? i18n("Settings") : i18n("LibrePods")
+                text: i18n("LibrePods")
                 font.weight: Font.DemiBold
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
 
             PlasmaComponents3.ToolButton {
-                visible: stackView.depth === 1 && !(Plasmoid.containmentDisplayHints & PlasmaCore.Types.ContainmentDrawsPlasmoidHeading)
+                visible: !(Plasmoid.containmentDisplayHints & PlasmaCore.Types.ContainmentDrawsPlasmoidHeading)
                 icon.name: "window-new-symbolic"
                 display: PlasmaComponents3.AbstractButton.IconOnly
                 onClicked: plasmoidItem.callBackend("OpenPage", ["app"], null, null)
@@ -90,221 +86,239 @@ PlasmaExtras.Representation {
         }
     }
 
-    QQC2.StackView {
-        id: stackView
+    Item {
+        id: contentContainer
         anchors.fill: parent
-        initialItem: mainPage
-    }
+        implicitHeight: contentColumn.implicitHeight + (Kirigami.Units.largeSpacing * 2)
 
-    Component {
-        id: mainPage
+        ColumnLayout {
+            id: contentColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.margins: Kirigami.Units.largeSpacing
+            spacing: Kirigami.Units.largeSpacing
 
-        Item {
-            id: mainPageContainer
-            implicitHeight: mainColumn.implicitHeight + (Kirigami.Units.largeSpacing * 2)
+            PlasmaComponents3.TabBar {
+                id: tabBar
+                Layout.fillWidth: true
+                currentIndex: root.currentTab
+                onCurrentIndexChanged: root.currentTab = currentIndex
 
-            ColumnLayout {
-                id: mainColumn
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: Kirigami.Units.largeSpacing
-                spacing: Kirigami.Units.largeSpacing
-
-                PlasmaComponents3.Label {
-                    Layout.fillWidth: true
-                    text: plasmoidItem.backendAvailable
-                        ? (plasmoidItem.status.connected
-                           ? i18n("%1 connected", plasmoidItem.status.deviceName !== "" ? plasmoidItem.status.deviceName : "AirPods")
-                           : i18n("No AirPods connected"))
-                        : i18n("Waiting for backend…")
-                    horizontalAlignment: Text.AlignHCenter
-                    color: plasmoidItem.status.connected ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.textColor
-                    wrapMode: Text.WordWrap
+                PlasmaComponents3.TabButton {
+                    text: i18n("Controls")
                 }
 
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: Kirigami.Units.smallSpacing
-                    rowSpacing: Kirigami.Units.smallSpacing
-
-                    Repeater {
-                        model: [
-                            {
-                                label: i18n("Left"),
-                                icon: "audio-headphones-symbolic",
-                                available: plasmoidItem.status.leftAvailable,
-                                level: plasmoidItem.status.leftBattery,
-                                charging: plasmoidItem.status.leftCharging
-                            },
-                            {
-                                label: i18n("Right"),
-                                icon: "audio-headphones-symbolic",
-                                available: plasmoidItem.status.rightAvailable,
-                                level: plasmoidItem.status.rightBattery,
-                                charging: plasmoidItem.status.rightCharging
-                            },
-                            {
-                                label: i18n("Case"),
-                                icon: "battery-symbolic",
-                                available: plasmoidItem.status.caseAvailable,
-                                level: plasmoidItem.status.caseBattery,
-                                charging: plasmoidItem.status.caseCharging
-                            },
-                            {
-                                label: i18n("Headset"),
-                                icon: "audio-headset-symbolic",
-                                available: plasmoidItem.status.headsetAvailable,
-                                level: plasmoidItem.status.headsetBattery,
-                                charging: plasmoidItem.status.headsetCharging
-                            }
-                        ]
-
-                        delegate: PlasmaComponents3.Frame {
-                            required property var modelData
-                            visible: modelData.available
-                            Layout.fillWidth: true
-
-                            contentItem: ColumnLayout {
-                                spacing: Kirigami.Units.smallSpacing
-
-                                Kirigami.Icon {
-                                    source: modelData.icon
-                                    implicitWidth: Kirigami.Units.iconSizes.smallMedium
-                                    implicitHeight: Kirigami.Units.iconSizes.smallMedium
-                                    Layout.alignment: Qt.AlignHCenter
-                                }
-
-                                PlasmaComponents3.Label {
-                                    text: modelData.label
-                                    font.weight: Font.Medium
-                                    Layout.fillWidth: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                                PlasmaComponents3.Label {
-                                    text: root.batteryDisplay(modelData.level, modelData.charging)
-                                    Layout.fillWidth: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                }
-                            }
-                        }
-                    }
-                }
-
-                PlasmaComponents3.Label {
-                    Layout.fillWidth: true
-                    text: i18n("Noise Control")
-                    font.weight: Font.DemiBold
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-                    enabled: plasmoidItem.status.connected
-
-                    Repeater {
-                        model: [
-                            { text: i18n("Off"), value: 0 },
-                            { text: i18n("ANC"), value: 1 },
-                            { text: i18n("Transparency"), value: 2 },
-                            { text: i18n("Adaptive"), value: 3 }
-                        ]
-
-                        delegate: PlasmaComponents3.Button {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            text: modelData.text
-                            checkable: true
-                            checked: (root.selectedNoiseControlMode >= 0
-                                ? root.selectedNoiseControlMode
-                                : Number(plasmoidItem.status.noiseControlMode)) === modelData.value
-                            highlighted: checked
-                            onClicked: {
-                                root.selectedNoiseControlMode = modelData.value
-                                plasmoidItem.callBackend("SetNoiseControlMode", [modelData.value], null, null)
-                            }
-                        }
-                    }
-                }
-
-                PlasmaComponents3.Switch {
-                    Layout.fillWidth: true
-                    text: i18n("Conversational Awareness")
-                    checked: plasmoidItem.status.conversationalAwareness
-                    enabled: plasmoidItem.status.connected
-                    onClicked: plasmoidItem.callBackend("SetConversationalAwareness", [checked], null, null)
-                }
-
-                PlasmaComponents3.Switch {
-                    Layout.fillWidth: true
-                    text: i18n("Hearing Aid")
-                    checked: plasmoidItem.status.hearingAidEnabled
-                    enabled: plasmoidItem.status.connected
-                    onClicked: plasmoidItem.callBackend("SetHearingAidEnabled", [checked], null, null)
+                PlasmaComponents3.TabButton {
+                    text: i18n("Settings")
                 }
             }
-        }
-    }
 
-    Component {
-        id: settingsPage
+            QQC2.StackLayout {
+                id: pageStack
+                currentIndex: root.currentTab
+                Layout.fillWidth: true
+                implicitHeight: currentItem ? currentItem.implicitHeight : 0
 
-        PlasmaComponents3.ScrollView {
-            implicitHeight: settingsColumn.implicitHeight + (Kirigami.Units.largeSpacing * 2)
-            contentWidth: availableWidth
+                Item {
+                    id: controlsPage
+                    implicitHeight: controlsColumn.implicitHeight
 
-            ColumnLayout {
-                id: settingsColumn
-                x: Kirigami.Units.largeSpacing
-                y: Kirigami.Units.largeSpacing
-                width: parent.width - (Kirigami.Units.largeSpacing * 2)
-                spacing: Kirigami.Units.largeSpacing
+                    ColumnLayout {
+                        id: controlsColumn
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        spacing: Kirigami.Units.largeSpacing
 
-                PlasmaComponents3.Switch {
-                    Layout.fillWidth: true
-                    text: i18n("Cross-Device Connectivity")
-                    checked: plasmoidItem.status.crossDeviceEnabled
-                    onClicked: plasmoidItem.callBackend("SetCrossDeviceEnabled", [checked], null, null)
-                }
+                        PlasmaComponents3.Label {
+                            Layout.fillWidth: true
+                            text: plasmoidItem.backendAvailable
+                                ? (plasmoidItem.status.connected
+                                   ? i18n("%1 connected", plasmoidItem.status.deviceName !== "" ? plasmoidItem.status.deviceName : "AirPods")
+                                   : i18n("No AirPods connected"))
+                                : i18n("Waiting for backend…")
+                            horizontalAlignment: Text.AlignHCenter
+                            color: plasmoidItem.status.connected ? Kirigami.Theme.positiveTextColor : Kirigami.Theme.textColor
+                            wrapMode: Text.WordWrap
+                        }
 
-                PlasmaComponents3.Switch {
-                    Layout.fillWidth: true
-                    text: i18n("One Bud ANC Mode")
-                    checked: plasmoidItem.status.oneBudANCMode
-                    onClicked: plasmoidItem.callBackend("SetOneBudANCMode", [checked], null, null)
-                }
+                        GridLayout {
+                            id: batteryGrid
+                            Layout.fillWidth: true
+                            columns: 2
+                            columnSpacing: Kirigami.Units.smallSpacing
+                            rowSpacing: Kirigami.Units.smallSpacing
 
-                PlasmaComponents3.Switch {
-                    Layout.fillWidth: true
-                    text: i18n("Enable Notifications")
-                    checked: plasmoidItem.status.notificationsEnabled
-                    onClicked: plasmoidItem.callBackend("SetNotificationsEnabled", [checked], null, null)
-                }
+                            Repeater {
+                                model: [
+                                    {
+                                        label: i18n("Left"),
+                                        icon: "audio-headphones-symbolic",
+                                        available: plasmoidItem.status.leftAvailable,
+                                        level: plasmoidItem.status.leftBattery,
+                                        charging: plasmoidItem.status.leftCharging
+                                    },
+                                    {
+                                        label: i18n("Right"),
+                                        icon: "audio-headphones-symbolic",
+                                        available: plasmoidItem.status.rightAvailable,
+                                        level: plasmoidItem.status.rightBattery,
+                                        charging: plasmoidItem.status.rightCharging
+                                    },
+                                    {
+                                        label: i18n("Case"),
+                                        icon: "battery-symbolic",
+                                        available: plasmoidItem.status.caseAvailable,
+                                        level: plasmoidItem.status.caseBattery,
+                                        charging: plasmoidItem.status.caseCharging
+                                    },
+                                    {
+                                        label: i18n("Headset"),
+                                        icon: "audio-headset-symbolic",
+                                        available: plasmoidItem.status.headsetAvailable,
+                                        level: plasmoidItem.status.headsetBattery,
+                                        charging: plasmoidItem.status.headsetCharging
+                                    }
+                                ]
 
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
+                                delegate: PlasmaComponents3.Frame {
+                                    required property var modelData
+                                    visible: modelData.available
+                                    Layout.preferredWidth: (batteryGrid.width - batteryGrid.columnSpacing) / 2
+                                    Layout.minimumWidth: Layout.preferredWidth
+                                    Layout.maximumWidth: Layout.preferredWidth
 
-                    PlasmaComponents3.Label {
-                        text: i18n("Retry Attempts")
+                                    contentItem: ColumnLayout {
+                                        spacing: Kirigami.Units.smallSpacing
+
+                                        Kirigami.Icon {
+                                            source: modelData.icon
+                                            implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                                            implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                                            Layout.alignment: Qt.AlignHCenter
+                                        }
+
+                                        PlasmaComponents3.Label {
+                                            text: modelData.label
+                                            font.weight: Font.Medium
+                                            Layout.fillWidth: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+
+                                        PlasmaComponents3.Label {
+                                            text: root.batteryDisplay(modelData.level, modelData.charging)
+                                            Layout.fillWidth: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        PlasmaComponents3.Label {
+                            Layout.fillWidth: true
+                            text: i18n("Noise Control")
+                            font.weight: Font.DemiBold
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+                            enabled: plasmoidItem.status.connected
+
+                            Repeater {
+                                model: [
+                                    { text: i18n("Off"), value: 0 },
+                                    { text: i18n("ANC"), value: 1 },
+                                    { text: i18n("Transparency"), value: 2 },
+                                    { text: i18n("Adaptive"), value: 3 }
+                                ]
+
+                                delegate: PlasmaComponents3.Button {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: modelData.text
+                                    checkable: true
+                                    checked: (root.selectedNoiseControlMode >= 0
+                                        ? root.selectedNoiseControlMode
+                                        : Number(plasmoidItem.status.noiseControlMode)) === modelData.value
+                                    highlighted: checked
+                                    onClicked: {
+                                        root.selectedNoiseControlMode = modelData.value
+                                        plasmoidItem.callBackend("SetNoiseControlMode", [modelData.value], null, null)
+                                    }
+                                }
+                            }
+                        }
+
+                        PlasmaComponents3.Switch {
+                            Layout.fillWidth: true
+                            text: i18n("Conversational Awareness")
+                            checked: plasmoidItem.status.conversationalAwareness
+                            enabled: plasmoidItem.status.connected
+                            onClicked: plasmoidItem.callBackend("SetConversationalAwareness", [checked], null, null)
+                        }
+
+                        PlasmaComponents3.Switch {
+                            Layout.fillWidth: true
+                            text: i18n("Hearing Aid")
+                            checked: plasmoidItem.status.hearingAidEnabled
+                            enabled: plasmoidItem.status.connected
+                            onClicked: plasmoidItem.callBackend("SetHearingAidEnabled", [checked], null, null)
+                        }
                     }
+                }
 
-                    PlasmaComponents3.SpinBox {
-                        from: 1
-                        to: 10
-                        value: plasmoidItem.status.retryAttempts
-                        onValueModified: plasmoidItem.callBackend("SetRetryAttempts", [value], null, null)
+                Item {
+                    id: settingsPage
+                    implicitHeight: settingsColumn.implicitHeight
+
+                    ColumnLayout {
+                        id: settingsColumn
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        spacing: Kirigami.Units.largeSpacing
+
+                        PlasmaComponents3.Switch {
+                            Layout.fillWidth: true
+                            text: i18n("Cross-Device Connectivity")
+                            checked: plasmoidItem.status.crossDeviceEnabled
+                            onClicked: plasmoidItem.callBackend("SetCrossDeviceEnabled", [checked], null, null)
+                        }
+
+                        PlasmaComponents3.Switch {
+                            Layout.fillWidth: true
+                            text: i18n("One Bud ANC Mode")
+                            checked: plasmoidItem.status.oneBudANCMode
+                            onClicked: plasmoidItem.callBackend("SetOneBudANCMode", [checked], null, null)
+                        }
+
+                        PlasmaComponents3.Switch {
+                            Layout.fillWidth: true
+                            text: i18n("Enable Notifications")
+                            checked: plasmoidItem.status.notificationsEnabled
+                            onClicked: plasmoidItem.callBackend("SetNotificationsEnabled", [checked], null, null)
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            PlasmaComponents3.Label {
+                                text: i18n("Retry Attempts")
+                            }
+
+                            PlasmaComponents3.SpinBox {
+                                from: 1
+                                to: 10
+                                value: plasmoidItem.status.retryAttempts
+                                onValueModified: plasmoidItem.callBackend("SetRetryAttempts", [value], null, null)
+                            }
+                        }
                     }
                 }
-
-                PlasmaComponents3.Button {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: i18n("Open Advanced Settings")
-                    icon.name: "settings-configure"
-                    onClicked: plasmoidItem.callBackend("OpenPage", ["settings"], null, null)
-                }
-
             }
         }
     }

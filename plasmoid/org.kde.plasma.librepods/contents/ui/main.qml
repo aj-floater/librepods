@@ -71,10 +71,10 @@ PlasmoidItem {
 
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
-            id: openSettingsAction
-            text: i18n("Open Settings")
-            icon.name: "configure-symbolic"
-            onTriggered: root.callBackend("OpenPage", ["settings"], null, null)
+            id: openWindowAction
+            text: i18n("Open LibrePods")
+            icon.name: "window-new-symbolic"
+            onTriggered: root.callBackend("OpenPage", ["app"], null, null)
         }
     ]
 
@@ -181,7 +181,7 @@ PlasmoidItem {
     }
 
     Component.onCompleted: {
-        Plasmoid.setInternalAction("configure", openSettingsAction)
+        Plasmoid.setInternalAction("configure", openWindowAction)
         ensureBackendStarted()
         refreshStatus()
     }
