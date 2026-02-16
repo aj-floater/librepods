@@ -103,6 +103,7 @@ public:
         connect(m_deviceInfo, &DeviceInfo::hearingAidEnabledChanged, this, [this](bool) { emit StatusChanged(statusMap()); });
         connect(m_deviceInfo, &DeviceInfo::oneBudANCModeChanged, this, [this](bool) { emit StatusChanged(statusMap()); });
         connect(m_deviceInfo, &DeviceInfo::deviceNameChanged, this, [this](const QString &) { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo, &DeviceInfo::modelChanged, this, [this]() { emit StatusChanged(statusMap()); });
         connect(m_deviceInfo->getBattery(), &Battery::batteryStatusChanged, this, [this]() { emit StatusChanged(statusMap()); });
 
         // Load settings
@@ -1097,6 +1098,8 @@ private:
             {"connected", areAirpodsConnected()},
             {"deviceName", m_deviceInfo ? m_deviceInfo->deviceName() : QString()},
             {"model", m_deviceInfo ? static_cast<int>(m_deviceInfo->model()) : static_cast<int>(AirPodsModel::Unknown)},
+            {"podIcon", m_deviceInfo ? m_deviceInfo->podIcon() : QString("pod.png")},
+            {"caseIcon", m_deviceInfo ? m_deviceInfo->caseIcon() : QString("pod_case.png")},
             {"noiseControlMode", m_deviceInfo ? static_cast<int>(m_deviceInfo->noiseControlMode()) : 0},
             {"adaptiveNoiseLevel", m_deviceInfo ? m_deviceInfo->adaptiveNoiseLevel() : 0},
             {"conversationalAwareness", m_deviceInfo ? m_deviceInfo->conversationalAwareness() : false},

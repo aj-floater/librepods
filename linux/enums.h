@@ -85,7 +85,7 @@ namespace AirpodsTrayApp
                     return {"podpro.png", "podpro_case.png"};
                 case AirPodsModel::AirPodsMaxLightning:
                 case AirPodsModel::AirPodsMaxUSBC:
-                    return {"podmax.png", "max_case.png"};
+                    return {"podmax.png", "podmax.png"};
                 default:
                     return {"pod.png", "pod_case.png"}; // Default icon for unknown models
             }

@@ -20,6 +20,8 @@ PlasmoidItem {
         connected: false,
         deviceName: "",
         model: 0,
+        podIcon: "pod.png",
+        caseIcon: "pod_case.png",
         noiseControlMode: 0,
         adaptiveNoiseLevel: 50,
         conversationalAwareness: false,
