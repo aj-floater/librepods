@@ -93,9 +93,7 @@ PlasmaExtras.Representation {
 
         ColumnLayout {
             id: contentColumn
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
+            anchors.fill: parent
             anchors.margins: Kirigami.Units.largeSpacing
             spacing: Kirigami.Units.largeSpacing
 
@@ -118,6 +116,7 @@ PlasmaExtras.Representation {
                 id: pageStack
                 currentIndex: root.currentTab
                 Layout.fillWidth: true
+                Layout.fillHeight: true
                 implicitHeight: currentItem ? currentItem.implicitHeight : 0
 
                 Item {
@@ -126,9 +125,7 @@ PlasmaExtras.Representation {
 
                     ColumnLayout {
                         id: controlsColumn
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.top: parent.top
+                        anchors.fill: parent
                         spacing: Kirigami.Units.largeSpacing
 
                         PlasmaComponents3.Label {
@@ -143,74 +140,147 @@ PlasmaExtras.Representation {
                             wrapMode: Text.WordWrap
                         }
 
-                        GridLayout {
-                            id: batteryGrid
+                        RowLayout {
+                            id: primaryPodsRow
                             Layout.fillWidth: true
-                            columns: 2
-                            columnSpacing: Kirigami.Units.smallSpacing
-                            rowSpacing: Kirigami.Units.smallSpacing
+                            Layout.fillHeight: true
+                            Layout.preferredHeight: Kirigami.Units.gridUnit * 5
+                            Layout.minimumHeight: Kirigami.Units.gridUnit * 4
+                            spacing: Kirigami.Units.smallSpacing
 
-                            Repeater {
-                                model: [
-                                    {
-                                        label: i18n("Left"),
-                                        icon: "audio-headphones-symbolic",
-                                        available: plasmoidItem.status.leftAvailable,
-                                        level: plasmoidItem.status.leftBattery,
-                                        charging: plasmoidItem.status.leftCharging
-                                    },
-                                    {
-                                        label: i18n("Right"),
-                                        icon: "audio-headphones-symbolic",
-                                        available: plasmoidItem.status.rightAvailable,
-                                        level: plasmoidItem.status.rightBattery,
-                                        charging: plasmoidItem.status.rightCharging
-                                    },
-                                    {
-                                        label: i18n("Case"),
-                                        icon: "battery-symbolic",
-                                        available: plasmoidItem.status.caseAvailable,
-                                        level: plasmoidItem.status.caseBattery,
-                                        charging: plasmoidItem.status.caseCharging
-                                    },
-                                    {
-                                        label: i18n("Headset"),
-                                        icon: "audio-headset-symbolic",
-                                        available: plasmoidItem.status.headsetAvailable,
-                                        level: plasmoidItem.status.headsetBattery,
-                                        charging: plasmoidItem.status.headsetCharging
+                            PlasmaComponents3.Frame {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.preferredWidth: 1
+                                Layout.minimumWidth: 0
+                                opacity: plasmoidItem.status.leftAvailable ? 1.0 : 0.6
+
+                                contentItem: ColumnLayout {
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Kirigami.Icon {
+                                        source: "audio-headphones-symbolic"
+                                        implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                                        implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                                        Layout.alignment: Qt.AlignHCenter
                                     }
-                                ]
 
-                                delegate: PlasmaComponents3.Frame {
-                                    required property var modelData
-                                    visible: modelData.available
-                                    Layout.preferredWidth: (batteryGrid.width - batteryGrid.columnSpacing) / 2
-                                    Layout.minimumWidth: Layout.preferredWidth
-                                    Layout.maximumWidth: Layout.preferredWidth
+                                    PlasmaComponents3.Label {
+                                        text: i18n("Left")
+                                        font.weight: Font.Medium
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
 
-                                    contentItem: ColumnLayout {
-                                        spacing: Kirigami.Units.smallSpacing
+                                    PlasmaComponents3.Label {
+                                        text: plasmoidItem.status.leftAvailable
+                                            ? root.batteryDisplay(plasmoidItem.status.leftBattery, plasmoidItem.status.leftCharging)
+                                            : "--"
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                }
+                            }
 
-                                        Kirigami.Icon {
-                                            source: modelData.icon
-                                            implicitWidth: Kirigami.Units.iconSizes.smallMedium
-                                            implicitHeight: Kirigami.Units.iconSizes.smallMedium
-                                            Layout.alignment: Qt.AlignHCenter
-                                        }
+                            PlasmaComponents3.Frame {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                Layout.preferredWidth: 1
+                                Layout.minimumWidth: 0
+                                opacity: plasmoidItem.status.rightAvailable ? 1.0 : 0.6
 
-                                        PlasmaComponents3.Label {
-                                            text: modelData.label
-                                            font.weight: Font.Medium
-                                            Layout.fillWidth: true
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
+                                contentItem: ColumnLayout {
+                                    spacing: Kirigami.Units.smallSpacing
 
-                                        PlasmaComponents3.Label {
-                                            text: root.batteryDisplay(modelData.level, modelData.charging)
-                                            Layout.fillWidth: true
-                                            horizontalAlignment: Text.AlignHCenter
-                                        }
+                                    Kirigami.Icon {
+                                        source: "audio-headphones-symbolic"
+                                        implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                                        implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+
+                                    PlasmaComponents3.Label {
+                                        text: i18n("Right")
+                                        font.weight: Font.Medium
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    PlasmaComponents3.Label {
+                                        text: plasmoidItem.status.rightAvailable
+                                            ? root.batteryDisplay(plasmoidItem.status.rightBattery, plasmoidItem.status.rightCharging)
+                                            : "--"
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            id: secondaryPodsRow
+                            visible: plasmoidItem.status.caseAvailable || plasmoidItem.status.headsetAvailable
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+
+                            PlasmaComponents3.Frame {
+                                visible: plasmoidItem.status.caseAvailable
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                Layout.minimumWidth: 0
+
+                                contentItem: ColumnLayout {
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Kirigami.Icon {
+                                        source: "battery-symbolic"
+                                        implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                                        implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+
+                                    PlasmaComponents3.Label {
+                                        text: i18n("Case")
+                                        font.weight: Font.Medium
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    PlasmaComponents3.Label {
+                                        text: root.batteryDisplay(plasmoidItem.status.caseBattery, plasmoidItem.status.caseCharging)
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                }
+                            }
+
+                            PlasmaComponents3.Frame {
+                                visible: plasmoidItem.status.headsetAvailable
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 1
+                                Layout.minimumWidth: 0
+
+                                contentItem: ColumnLayout {
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Kirigami.Icon {
+                                        source: "audio-headset-symbolic"
+                                        implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                                        implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                                        Layout.alignment: Qt.AlignHCenter
+                                    }
+
+                                    PlasmaComponents3.Label {
+                                        text: i18n("Headset")
+                                        font.weight: Font.Medium
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+
+                                    PlasmaComponents3.Label {
+                                        text: root.batteryDisplay(plasmoidItem.status.headsetBattery, plasmoidItem.status.headsetCharging)
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                 }
                             }
