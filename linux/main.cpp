@@ -47,6 +47,7 @@ class AirPodsTrayApp : public QObject {
     Q_PROPERTY(int retryAttempts READ retryAttempts WRITE setRetryAttempts NOTIFY retryAttemptsChanged)
     Q_PROPERTY(bool hideOnStart READ hideOnStart CONSTANT)
     Q_PROPERTY(bool panelMode READ panelMode CONSTANT)
+    Q_PROPERTY(bool popupGrabSupported READ popupGrabSupported CONSTANT)
     Q_PROPERTY(DeviceInfo *deviceInfo READ deviceInfo CONSTANT)
     Q_PROPERTY(QString phoneMacStatus READ phoneMacStatus NOTIFY phoneMacStatusChanged)
     Q_PROPERTY(bool hearingAidEnabled READ hearingAidEnabled WRITE setHearingAidEnabled NOTIFY hearingAidEnabledChanged)
@@ -138,6 +139,10 @@ public:
     int retryAttempts() const { return m_retryAttempts; }
     bool hideOnStart() const { return m_hideOnStart; }
     bool panelMode() const { return m_panelMode; }
+    bool popupGrabSupported() const
+    {
+        return !QGuiApplication::platformName().contains("wayland", Qt::CaseInsensitive);
+    }
     DeviceInfo *deviceInfo() const { return m_deviceInfo; }
     QString phoneMacStatus() const { return m_phoneMacStatus; }
     bool hearingAidEnabled() const { return m_deviceInfo->hearingAidEnabled(); }
