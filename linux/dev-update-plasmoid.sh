@@ -52,6 +52,33 @@ if ! command -v kpackagetool6 >/dev/null 2>&1; then
     exit 1
 fi
 
+INSTALL_TARGETS=(
+    "${HOME}/.local/bin/librepods"
+    "${HOME}/.local/share/applications/me.kavishdevar.librepods.desktop"
+    "${HOME}/.local/share/icons/hicolor/512x512/apps/librepods.png"
+    "${HOME}/.local/share/dbus-1/services/me.kavishdevar.librepods.service"
+    "${HOME}/.local/share/plasma/plasmoids/org.kde.plasma.librepods"
+)
+
+needs_chown=0
+for target in "${INSTALL_TARGETS[@]}"; do
+    if [[ -e "${target}" && ! -O "${target}" ]]; then
+        needs_chown=1
+        break
+    fi
+done
+
+if [[ "${needs_chown}" -eq 1 ]]; then
+    echo "Install targets in ~/.local are not owned by ${USER}."
+    echo "Fix once with:"
+    echo "  sudo chown -R \"${USER}:${USER}\" \\"
+    for target in "${INSTALL_TARGETS[@]}"; do
+        echo "    \"${target}\" \\"
+    done
+    echo "    2>/dev/null || true"
+    exit 1
+fi
+
 if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
     cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}"
 fi
