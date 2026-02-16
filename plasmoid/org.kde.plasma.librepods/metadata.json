@@ -1,0 +1,23 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Id": "org.kde.plasma.librepods",
+        "Name": "LibrePods",
+        "Description": "Control AirPods from the KDE system tray",
+        "Icon": "audio-headset-symbolic",
+        "Category": "Utilities",
+        "EnabledByDefault": true,
+        "License": "GPL-3.0-or-later",
+        "Version": "0.1.0",
+        "Website": "https://github.com/aj-floater/librepods",
+        "Authors": [
+            {
+                "Name": "LibrePods contributors"
+            }
+        ]
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-DBusActivationService": "me.kavishdevar.librepods",
+    "X-Plasma-NotificationArea": "true",
+    "X-Plasma-NotificationAreaCategory": "Hardware"
+}

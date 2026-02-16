@@ -90,6 +90,10 @@ install(FILES assets/me.kavishdevar.librepods.desktop
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
 install(FILES assets/librepods.png
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps")
+install(FILES assets/me.kavishdevar.librepods.service
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/dbus-1/services")
+install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/../plasmoid/org.kde.plasma.librepods"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/plasma/plasmoids")
 
 # Translation support
 qt_add_translations(librepods

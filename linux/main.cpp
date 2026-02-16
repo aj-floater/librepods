@@ -18,6 +18,7 @@
 #include <QStandardPaths>
 #include <QCursor>
 #include <QScreen>
+#include <QDBusConnection>
 
 #include "airpods_packets.h"
 #include "logger.h"
@@ -39,6 +40,7 @@ Q_LOGGING_CATEGORY(librepods, "librepods")
 
 class AirPodsTrayApp : public QObject {
     Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "me.kavishdevar.librepods")
     Q_PROPERTY(bool airpodsConnected READ areAirpodsConnected NOTIFY airPodsStatusChanged)
     Q_PROPERTY(int earDetectionBehavior READ earDetectionBehavior WRITE setEarDetectionBehavior NOTIFY earDetectionBehaviorChanged)
     Q_PROPERTY(bool crossDeviceEnabled READ crossDeviceEnabled WRITE setCrossDeviceEnabled NOTIFY crossDeviceEnabledChanged)
@@ -48,33 +50,38 @@ class AirPodsTrayApp : public QObject {
     Q_PROPERTY(bool hideOnStart READ hideOnStart CONSTANT)
     Q_PROPERTY(bool panelMode READ panelMode CONSTANT)
     Q_PROPERTY(bool popupGrabSupported READ popupGrabSupported CONSTANT)
+    Q_PROPERTY(bool trayEnabled READ trayEnabled CONSTANT)
     Q_PROPERTY(DeviceInfo *deviceInfo READ deviceInfo CONSTANT)
     Q_PROPERTY(QString phoneMacStatus READ phoneMacStatus NOTIFY phoneMacStatusChanged)
     Q_PROPERTY(bool hearingAidEnabled READ hearingAidEnabled WRITE setHearingAidEnabled NOTIFY hearingAidEnabledChanged)
 
 public:
-    AirPodsTrayApp(bool debugMode, bool hideOnStart, bool panelMode, QQmlApplicationEngine *parent = nullptr)
+    AirPodsTrayApp(bool debugMode, bool hideOnStart, bool panelMode, bool trayEnabled, QQmlApplicationEngine *parent = nullptr)
         : QObject(parent), debugMode(debugMode), m_settings(new QSettings("AirPodsTrayApp", "AirPodsTrayApp"))
-        , m_autoStartManager(new AutoStartManager(this)), m_hideOnStart(hideOnStart), m_panelMode(panelMode), parent(parent)
+        , m_autoStartManager(new AutoStartManager(this)), m_hideOnStart(hideOnStart), m_panelMode(panelMode), m_trayEnabled(trayEnabled), parent(parent)
         , m_deviceInfo(new DeviceInfo(this)), m_bleManager(new BleManager(this))
         , m_systemSleepMonitor(new SystemSleepMonitor(this))
     {
         QLoggingCategory::setFilterRules(QString("librepods.debug=%1").arg(debugMode ? "true" : "false"));
         LOG_INFO("Initializing LibrePods");
 
+        m_notificationsEnabled = loadNotificationsEnabled();
+
         // Initialize tray icon and connect signals
-        trayManager = new TrayIconManager(this);
-        trayManager->setNotificationsEnabled(loadNotificationsEnabled());
-        connect(trayManager, &TrayIconManager::trayClicked, this, &AirPodsTrayApp::onTrayIconActivated);
-        connect(trayManager, &TrayIconManager::openApp, this, &AirPodsTrayApp::onOpenApp);
-        connect(trayManager, &TrayIconManager::openSettings, this, &AirPodsTrayApp::onOpenSettings);
-        connect(trayManager, &TrayIconManager::noiseControlChanged, this, &AirPodsTrayApp::setNoiseControlMode);
-        connect(trayManager, &TrayIconManager::conversationalAwarenessToggled, this, &AirPodsTrayApp::setConversationalAwareness);
-        connect(m_deviceInfo, &DeviceInfo::batteryStatusChanged, trayManager, &TrayIconManager::updateBatteryStatus);
-        connect(m_deviceInfo, &DeviceInfo::noiseControlModeChanged, trayManager, &TrayIconManager::updateNoiseControlState);
-        connect(m_deviceInfo, &DeviceInfo::conversationalAwarenessChanged, trayManager, &TrayIconManager::updateConversationalAwareness);
-        connect(trayManager, &TrayIconManager::notificationsEnabledChanged, this, &AirPodsTrayApp::saveNotificationsEnabled);
-        connect(trayManager, &TrayIconManager::notificationsEnabledChanged, this, &AirPodsTrayApp::notificationsEnabledChanged);
+        if (m_trayEnabled) {
+            trayManager = new TrayIconManager(this);
+            trayManager->setNotificationsEnabled(m_notificationsEnabled);
+            connect(trayManager, &TrayIconManager::trayClicked, this, &AirPodsTrayApp::onTrayIconActivated);
+            connect(trayManager, &TrayIconManager::openApp, this, &AirPodsTrayApp::onOpenApp);
+            connect(trayManager, &TrayIconManager::openSettings, this, &AirPodsTrayApp::onOpenSettings);
+            connect(trayManager, &TrayIconManager::noiseControlChanged, this, &AirPodsTrayApp::setNoiseControlMode);
+            connect(trayManager, &TrayIconManager::conversationalAwarenessToggled, this, &AirPodsTrayApp::setConversationalAwareness);
+            connect(m_deviceInfo, &DeviceInfo::batteryStatusChanged, trayManager, &TrayIconManager::updateBatteryStatus);
+            connect(m_deviceInfo, &DeviceInfo::noiseControlModeChanged, trayManager, &TrayIconManager::updateNoiseControlState);
+            connect(m_deviceInfo, &DeviceInfo::conversationalAwarenessChanged, trayManager, &TrayIconManager::updateConversationalAwareness);
+            connect(trayManager, &TrayIconManager::notificationsEnabledChanged, this, &AirPodsTrayApp::saveNotificationsEnabled);
+            connect(trayManager, &TrayIconManager::notificationsEnabledChanged, this, &AirPodsTrayApp::notificationsEnabledChanged);
+        }
 
         // Initialize MediaController and connect signals
         mediaController = new MediaController(this);
@@ -89,6 +96,14 @@ public:
         connect(m_deviceInfo->getBattery(), &Battery::primaryChanged, this, &AirPodsTrayApp::primaryChanged);
         connect(m_systemSleepMonitor, &SystemSleepMonitor::systemGoingToSleep, this, &AirPodsTrayApp::onSystemGoingToSleep);
         connect(m_systemSleepMonitor, &SystemSleepMonitor::systemWakingUp, this, &AirPodsTrayApp::onSystemWakingUp);
+        connect(this, &AirPodsTrayApp::airPodsStatusChanged, this, [this]() { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo, &DeviceInfo::batteryStatusChanged, this, [this]() { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo, &DeviceInfo::noiseControlModeChanged, this, [this](NoiseControlMode) { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo, &DeviceInfo::conversationalAwarenessChanged, this, [this](bool) { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo, &DeviceInfo::hearingAidEnabledChanged, this, [this](bool) { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo, &DeviceInfo::oneBudANCModeChanged, this, [this](bool) { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo, &DeviceInfo::deviceNameChanged, this, [this](const QString &) { emit StatusChanged(statusMap()); });
+        connect(m_deviceInfo->getBattery(), &Battery::batteryStatusChanged, this, [this]() { emit StatusChanged(statusMap()); });
 
         // Load settings
         CrossDevice.isEnabled = loadCrossDeviceEnabled();
@@ -134,8 +149,17 @@ public:
     int earDetectionBehavior() const { return mediaController->getEarDetectionBehavior(); }
     bool crossDeviceEnabled() const { return CrossDevice.isEnabled; }
     AutoStartManager *autoStartManager() const { return m_autoStartManager; }
-    bool notificationsEnabled() const { return trayManager->notificationsEnabled(); }
-    void setNotificationsEnabled(bool enabled) { trayManager->setNotificationsEnabled(enabled); }
+    bool notificationsEnabled() const { return trayManager ? trayManager->notificationsEnabled() : m_notificationsEnabled; }
+    void setNotificationsEnabled(bool enabled)
+    {
+        m_notificationsEnabled = enabled;
+        if (trayManager) {
+            trayManager->setNotificationsEnabled(enabled);
+        } else {
+            saveNotificationsEnabled(enabled);
+            emit notificationsEnabledChanged(enabled);
+        }
+    }
     int retryAttempts() const { return m_retryAttempts; }
     bool hideOnStart() const { return m_hideOnStart; }
     bool panelMode() const { return m_panelMode; }
@@ -143,6 +167,7 @@ public:
     {
         return !QGuiApplication::platformName().contains("wayland", Qt::CaseInsensitive);
     }
+    bool trayEnabled() const { return m_trayEnabled; }
     DeviceInfo *deviceInfo() const { return m_deviceInfo; }
     QString phoneMacStatus() const { return m_phoneMacStatus; }
     bool hearingAidEnabled() const { return m_deviceInfo->hearingAidEnabled(); }
@@ -187,6 +212,77 @@ private:
     }
 
 public slots:
+    Q_SCRIPTABLE QVariantMap GetStatus() const
+    {
+        return statusMap();
+    }
+
+    Q_SCRIPTABLE bool SetNoiseControlMode(int mode)
+    {
+        setNoiseControlModeInt(mode);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool SetConversationalAwareness(bool enabled)
+    {
+        setConversationalAwareness(enabled);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool SetHearingAidEnabled(bool enabled)
+    {
+        setHearingAidEnabled(enabled);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool SetCrossDeviceEnabled(bool enabled)
+    {
+        setCrossDeviceEnabled(enabled);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool SetAdaptiveNoiseLevel(int level)
+    {
+        setAdaptiveNoiseLevel(level);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool SetOneBudANCMode(bool enabled)
+    {
+        setOneBudANCMode(enabled);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool SetNotificationsEnabled(bool enabled)
+    {
+        setNotificationsEnabled(enabled);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool SetRetryAttempts(int attempts)
+    {
+        setRetryAttempts(attempts);
+        emit StatusChanged(statusMap());
+        return true;
+    }
+
+    Q_SCRIPTABLE bool OpenPage(const QString &page)
+    {
+        if (page == "settings") {
+            onOpenSettings();
+        } else {
+            onOpenApp();
+        }
+        return true;
+    }
+
     void connectToDevice(const QString &address) {
         LOG_INFO("Connecting to device with address: " << address);
         QBluetoothAddress btAddress(address);
@@ -475,7 +571,7 @@ private slots:
 
     void onOpenApp()
     {
-        QObject *rootObject = parent->rootObjects().first();
+        QObject *rootObject = (!parent || parent->rootObjects().isEmpty()) ? nullptr : parent->rootObjects().first();
         if (rootObject) {
             QMetaObject::invokeMethod(rootObject, "reopen", Q_ARG(QVariant, "app"));
         }
@@ -487,7 +583,7 @@ private slots:
 
     void onOpenSettings()
     {
-        QObject *rootObject = parent->rootObjects().first();
+        QObject *rootObject = (!parent || parent->rootObjects().isEmpty()) ? nullptr : parent->rootObjects().first();
         if (rootObject) {
             QMetaObject::invokeMethod(rootObject, "reopen", Q_ARG(QVariant, "settings"));
         }
@@ -543,10 +639,12 @@ private slots:
         emit airPodsStatusChanged();
 
         // Show system notification
-        trayManager->showNotification(
-            tr("AirPods Disconnected"),
-            tr("Your AirPods have been disconnected"));
-        trayManager->resetTrayIcon();
+        if (trayManager) {
+            trayManager->showNotification(
+                tr("AirPods Disconnected"),
+                tr("Your AirPods have been disconnected"));
+            trayManager->resetTrayIcon();
+        }
     }
 
     void bluezDeviceDisconnected(const QString &address, const QString &name)
@@ -988,8 +1086,43 @@ signals:
     void oneBudANCModeChanged(bool enabled);
     void phoneMacStatusChanged();
     void hearingAidEnabledChanged(bool enabled);
+    Q_SCRIPTABLE void StatusChanged(const QVariantMap &status);
 
 private:
+    QVariantMap statusMap() const
+    {
+        const Battery *battery = m_deviceInfo ? m_deviceInfo->getBattery() : nullptr;
+        const bool hasBattery = battery != nullptr;
+        QVariantMap status{
+            {"connected", areAirpodsConnected()},
+            {"deviceName", m_deviceInfo ? m_deviceInfo->deviceName() : QString()},
+            {"model", m_deviceInfo ? static_cast<int>(m_deviceInfo->model()) : static_cast<int>(AirPodsModel::Unknown)},
+            {"noiseControlMode", m_deviceInfo ? static_cast<int>(m_deviceInfo->noiseControlMode()) : 0},
+            {"adaptiveNoiseLevel", m_deviceInfo ? m_deviceInfo->adaptiveNoiseLevel() : 0},
+            {"conversationalAwareness", m_deviceInfo ? m_deviceInfo->conversationalAwareness() : false},
+            {"hearingAidEnabled", m_deviceInfo ? m_deviceInfo->hearingAidEnabled() : false},
+            {"oneBudANCMode", m_deviceInfo ? m_deviceInfo->oneBudANCMode() : false},
+            {"crossDeviceEnabled", CrossDevice.isEnabled},
+            {"notificationsEnabled", notificationsEnabled()},
+            {"retryAttempts", retryAttempts()},
+            {"phoneMacStatus", m_phoneMacStatus},
+            {"leftBattery", hasBattery ? static_cast<int>(battery->getLeftPodLevel()) : 0},
+            {"rightBattery", hasBattery ? static_cast<int>(battery->getRightPodLevel()) : 0},
+            {"caseBattery", hasBattery ? static_cast<int>(battery->getCaseLevel()) : 0},
+            {"headsetBattery", hasBattery ? static_cast<int>(battery->getHeadsetLevel()) : 0},
+            {"leftCharging", hasBattery ? battery->isLeftPodCharging() : false},
+            {"rightCharging", hasBattery ? battery->isRightPodCharging() : false},
+            {"caseCharging", hasBattery ? battery->isCaseCharging() : false},
+            {"headsetCharging", hasBattery ? battery->isHeadsetCharging() : false},
+            {"leftAvailable", hasBattery ? battery->isLeftPodAvailable() : false},
+            {"rightAvailable", hasBattery ? battery->isRightPodAvailable() : false},
+            {"caseAvailable", hasBattery ? battery->isCaseAvailable() : false},
+            {"headsetAvailable", hasBattery ? battery->isHeadsetAvailable() : false},
+        };
+
+        return status;
+    }
+
     QQuickWindow *mainWindow() const
     {
         if (!parent || parent->rootObjects().isEmpty()) {
@@ -1052,6 +1185,8 @@ private:
     int m_retryAttempts = 3;
     bool m_hideOnStart = false;
     bool m_panelMode = false;
+    bool m_trayEnabled = true;
+    bool m_notificationsEnabled = true;
     DeviceInfo *m_deviceInfo;
     BleManager *m_bleManager;
     SystemSleepMonitor *m_systemSleepMonitor = nullptr;
@@ -1105,6 +1240,8 @@ int main(int argc, char *argv[]) {
     bool debugMode = false;
     bool hideOnStart = false;
     bool panelMode = false;
+    bool trayEnabled = true;
+    bool dbusServiceMode = false;
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--debug")
             debugMode = true;
@@ -1114,12 +1251,21 @@ int main(int argc, char *argv[]) {
 
         if (QString(argv[i]) == "--panel")
             panelMode = true;
+
+        if (QString(argv[i]) == "--no-tray")
+            trayEnabled = false;
+
+        if (QString(argv[i]) == "--dbus-service") {
+            dbusServiceMode = true;
+            hideOnStart = true;
+            trayEnabled = false;
+        }
     }
 
     QQmlApplicationEngine engine;
     qmlRegisterType<Battery>("me.kavishdevar.Battery", 1, 0, "Battery");
     qmlRegisterType<DeviceInfo>("me.kavishdevar.DeviceInfo", 1, 0, "DeviceInfo");
-    AirPodsTrayApp *trayApp = new AirPodsTrayApp(debugMode, hideOnStart, panelMode, &engine);
+    AirPodsTrayApp *trayApp = new AirPodsTrayApp(debugMode, hideOnStart, panelMode, trayEnabled, &engine);
     engine.rootContext()->setContextProperty("airPodsTrayApp", trayApp);
 
     // Expose PHONE_MAC_ADDRESS environment variable to QML for placeholder in settings
@@ -1133,6 +1279,21 @@ int main(int argc, char *argv[]) {
 
     engine.addImageProvider("qrcode", new QRCodeImageProvider());
     trayApp->loadMainModule();
+
+    QDBusConnection sessionBus = QDBusConnection::sessionBus();
+    if (!sessionBus.registerService("me.kavishdevar.librepods")) {
+        LOG_WARN("Failed to register DBus service me.kavishdevar.librepods: " << sessionBus.lastError().message());
+    }
+    if (!sessionBus.registerObject("/me/kavishdevar/librepods", trayApp,
+                                   QDBusConnection::ExportScriptableSlots
+                                   | QDBusConnection::ExportScriptableSignals
+                                   | QDBusConnection::ExportScriptableProperties)) {
+        LOG_WARN("Failed to register DBus object: " << sessionBus.lastError().message());
+    }
+
+    if (dbusServiceMode) {
+        LOG_INFO("Running in DBus service mode");
+    }
 
     QLocalServer server;
     QLocalServer::removeServer("app_server");
@@ -1154,7 +1315,7 @@ int main(int argc, char *argv[]) {
             // Check if the message is "reopen", if so, trigger onOpenApp function
             if (msg == "reopen") {
                 LOG_INFO("Reopening app window");
-                QObject *rootObject = engine.rootObjects().first();
+                QObject *rootObject = engine.rootObjects().isEmpty() ? nullptr : engine.rootObjects().first();
                 if (rootObject) {
                     QMetaObject::invokeMethod(rootObject, "reopen", Q_ARG(QVariant, "app"));
                 }

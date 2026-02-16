@@ -85,11 +85,24 @@ A native Linux application to control your AirPods, with support for:
    ./librepods
    ```
 
-   KDE-like tray popup mode:
+   Legacy tray popup mode:
 
    ```bash
    ./librepods --panel
    ```
+
+3. Install KDE Plasma system tray applet (recommended):
+
+   ```bash
+   # from linux/build
+   cmake --install . --prefix "$HOME/.local"
+
+   # installs/updates the plasmoid package
+   kpackagetool6 --type Plasma/Applet --upgrade ../../plasmoid/org.kde.plasma.librepods
+   ```
+
+   Then add the `LibrePods` widget to your panel/system tray.  
+   The applet uses the same LibrePods backend via D-Bus (`me.kavishdevar.librepods`) and auto-starts it.
 
 ## Troubleshooting
 
