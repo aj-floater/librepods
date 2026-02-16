@@ -14,6 +14,7 @@ PlasmaExtras.Representation {
     id: root
 
     required property PlasmoidItem plasmoidItem
+    property int selectedNoiseControlMode: -1
 
     function batteryDisplay(level, charging) {
         const numeric = Number(level)
@@ -24,29 +25,36 @@ PlasmaExtras.Representation {
         return charging ? percent + " (Charging)" : percent
     }
 
-    function noiseControlLabel(mode) {
-        if (mode === 1) {
-            return i18n("ANC")
+    function ensureSelectedNoiseControlMode() {
+        if (selectedNoiseControlMode >= 0) {
+            return
         }
-        if (mode === 2) {
-            return i18n("Transparency")
-        }
-        if (mode === 3) {
-            return i18n("Adaptive")
-        }
-        return i18n("Off")
+        const mode = Number(plasmoidItem.status.noiseControlMode)
+        selectedNoiseControlMode = Number.isFinite(mode) ? mode : 0
     }
 
     implicitWidth: Kirigami.Units.gridUnit * 24
-    implicitHeight: Kirigami.Units.gridUnit * 18
+    implicitHeight: Math.max(
+        Kirigami.Units.gridUnit * 10,
+        (headerBar ? headerBar.implicitHeight : 0) + (stackView.currentItem ? stackView.currentItem.implicitHeight : 0))
     Layout.minimumWidth: Kirigami.Units.gridUnit * 22
     Layout.maximumWidth: Kirigami.Units.gridUnit * 28
-    Layout.minimumHeight: Kirigami.Units.gridUnit * 16
+    Layout.minimumHeight: Kirigami.Units.gridUnit * 10
     Layout.maximumHeight: Kirigami.Units.gridUnit * 24
     focus: true
     collapseMarginsHint: true
 
+    Component.onCompleted: ensureSelectedNoiseControlMode()
+
+    Connections {
+        target: plasmoidItem
+        function onStatusChanged() {
+            root.ensureSelectedNoiseControlMode()
+        }
+    }
+
     header: PlasmaExtras.PlasmoidHeading {
+        id: headerBar
         leftPadding: mirrored ? 0 : Kirigami.Units.smallSpacing
         rightPadding: mirrored ? Kirigami.Units.smallSpacing : 0
 
@@ -91,13 +99,16 @@ PlasmaExtras.Representation {
     Component {
         id: mainPage
 
-        PlasmaComponents3.ScrollView {
-            contentWidth: availableWidth
+        Item {
+            id: mainPageContainer
+            implicitHeight: mainColumn.implicitHeight + (Kirigami.Units.largeSpacing * 2)
 
             ColumnLayout {
-                x: Kirigami.Units.largeSpacing
-                y: Kirigami.Units.largeSpacing
-                width: parent.width - (Kirigami.Units.largeSpacing * 2)
+                id: mainColumn
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Kirigami.Units.largeSpacing
                 spacing: Kirigami.Units.largeSpacing
 
                 PlasmaComponents3.Label {
@@ -187,13 +198,6 @@ PlasmaExtras.Representation {
                     font.weight: Font.DemiBold
                 }
 
-                PlasmaComponents3.Label {
-                    Layout.fillWidth: true
-                    text: i18n("Current: %1", root.noiseControlLabel(plasmoidItem.status.noiseControlMode))
-                    font.weight: Font.Medium
-                    color: Kirigami.Theme.highlightColor
-                }
-
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
@@ -210,12 +214,16 @@ PlasmaExtras.Representation {
                         delegate: PlasmaComponents3.Button {
                             required property var modelData
                             Layout.fillWidth: true
-                            text: plasmoidItem.status.noiseControlMode === modelData.value
-                                ? i18n("✓ %1", modelData.text)
-                                : modelData.text
+                            text: modelData.text
                             checkable: true
-                            checked: plasmoidItem.status.noiseControlMode === modelData.value
-                            onClicked: plasmoidItem.callBackend("SetNoiseControlMode", [modelData.value], null, null)
+                            checked: (root.selectedNoiseControlMode >= 0
+                                ? root.selectedNoiseControlMode
+                                : Number(plasmoidItem.status.noiseControlMode)) === modelData.value
+                            highlighted: checked
+                            onClicked: {
+                                root.selectedNoiseControlMode = modelData.value
+                                plasmoidItem.callBackend("SetNoiseControlMode", [modelData.value], null, null)
+                            }
                         }
                     }
                 }
@@ -235,7 +243,6 @@ PlasmaExtras.Representation {
                     enabled: plasmoidItem.status.connected
                     onClicked: plasmoidItem.callBackend("SetHearingAidEnabled", [checked], null, null)
                 }
-
             }
         }
     }
@@ -244,9 +251,11 @@ PlasmaExtras.Representation {
         id: settingsPage
 
         PlasmaComponents3.ScrollView {
+            implicitHeight: settingsColumn.implicitHeight + (Kirigami.Units.largeSpacing * 2)
             contentWidth: availableWidth
 
             ColumnLayout {
+                id: settingsColumn
                 x: Kirigami.Units.largeSpacing
                 y: Kirigami.Units.largeSpacing
                 width: parent.width - (Kirigami.Units.largeSpacing * 2)
