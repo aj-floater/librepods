@@ -73,12 +73,10 @@ PlasmaExtras.Representation {
             contentWidth: availableWidth
 
             ColumnLayout {
-                width: parent.width
+                x: Kirigami.Units.largeSpacing
+                y: Kirigami.Units.largeSpacing
+                width: parent.width - (Kirigami.Units.largeSpacing * 2)
                 spacing: Kirigami.Units.largeSpacing
-                leftPadding: Kirigami.Units.largeSpacing
-                rightPadding: Kirigami.Units.largeSpacing
-                topPadding: Kirigami.Units.largeSpacing
-                bottomPadding: Kirigami.Units.largeSpacing
 
                 PlasmaComponents3.Label {
                     Layout.fillWidth: true
@@ -199,6 +197,10 @@ PlasmaExtras.Representation {
                     icon.name: "window-symbolic"
                     onClicked: plasmoidItem.callBackend("OpenPage", ["app"], null, null)
                 }
+
+                Item {
+                    Layout.preferredHeight: Kirigami.Units.largeSpacing
+                }
             }
         }
     }
@@ -210,12 +212,10 @@ PlasmaExtras.Representation {
             contentWidth: availableWidth
 
             ColumnLayout {
-                width: parent.width
+                x: Kirigami.Units.largeSpacing
+                y: Kirigami.Units.largeSpacing
+                width: parent.width - (Kirigami.Units.largeSpacing * 2)
                 spacing: Kirigami.Units.largeSpacing
-                leftPadding: Kirigami.Units.largeSpacing
-                rightPadding: Kirigami.Units.largeSpacing
-                topPadding: Kirigami.Units.largeSpacing
-                bottomPadding: Kirigami.Units.largeSpacing
 
                 PlasmaComponents3.Switch {
                     Layout.fillWidth: true
@@ -259,6 +259,10 @@ PlasmaExtras.Representation {
                     text: i18n("Open Advanced Settings")
                     icon.name: "settings-configure"
                     onClicked: plasmoidItem.callBackend("OpenPage", ["settings"], null, null)
+                }
+
+                Item {
+                    Layout.preferredHeight: Kirigami.Units.largeSpacing
                 }
             }
         }
