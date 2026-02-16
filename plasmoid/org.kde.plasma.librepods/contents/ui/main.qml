@@ -124,7 +124,7 @@ PlasmoidItem {
         service: root.serviceName
         path: root.objectPath
         iface: root.interfaceName
-        onReceivedSignal: message => {
+        function onReceivedSignal(message) {
             if (message.member !== "StatusChanged" || message.arguments.length === 0) {
                 return
             }
