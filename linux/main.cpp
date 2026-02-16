@@ -1178,7 +1178,7 @@ private:
     QByteArray lastBatteryStatus;
     QByteArray lastEarDetectionStatus;
     MediaController* mediaController;
-    TrayIconManager *trayManager;
+    TrayIconManager *trayManager = nullptr;
     BluetoothMonitor *monitor;
     QSettings *m_settings;
     AutoStartManager *m_autoStartManager;

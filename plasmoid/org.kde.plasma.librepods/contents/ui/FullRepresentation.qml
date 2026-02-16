@@ -15,12 +15,21 @@ PlasmaExtras.Representation {
 
     required property PlasmoidItem plasmoidItem
 
+    function batteryDisplay(level, charging) {
+        const numeric = Number(level)
+        if (!Number.isFinite(numeric) || numeric < 0) {
+            return "--"
+        }
+        const percent = Math.round(numeric) + "%"
+        return charging ? percent + " (Charging)" : percent
+    }
+
     implicitWidth: Kirigami.Units.gridUnit * 24
-    implicitHeight: Kirigami.Units.gridUnit * 24
+    implicitHeight: Kirigami.Units.gridUnit * 20
     Layout.minimumWidth: Kirigami.Units.gridUnit * 22
     Layout.maximumWidth: Kirigami.Units.gridUnit * 28
-    Layout.minimumHeight: Kirigami.Units.gridUnit * 18
-    Layout.maximumHeight: Kirigami.Units.gridUnit * 34
+    Layout.minimumHeight: Kirigami.Units.gridUnit * 16
+    Layout.maximumHeight: Kirigami.Units.gridUnit * 28
     focus: true
     collapseMarginsHint: true
 
@@ -50,11 +59,11 @@ PlasmaExtras.Representation {
 
             PlasmaComponents3.ToolButton {
                 visible: stackView.depth === 1 && !(Plasmoid.containmentDisplayHints & PlasmaCore.Types.ContainmentDrawsPlasmoidHeading)
-                icon.name: "configure-symbolic"
+                icon.name: "window-new-symbolic"
                 display: PlasmaComponents3.AbstractButton.IconOnly
-                onClicked: stackView.push(settingsPage)
+                onClicked: plasmoidItem.callBackend("OpenPage", ["app"], null, null)
                 PlasmaComponents3.ToolTip {
-                    text: i18n("Settings")
+                    text: i18n("Open Full App")
                 }
             }
         }
@@ -100,24 +109,28 @@ PlasmaExtras.Representation {
                         model: [
                             {
                                 label: i18n("Left"),
+                                icon: "audio-headphones-symbolic",
                                 available: plasmoidItem.status.leftAvailable,
                                 level: plasmoidItem.status.leftBattery,
                                 charging: plasmoidItem.status.leftCharging
                             },
                             {
                                 label: i18n("Right"),
+                                icon: "audio-headphones-symbolic",
                                 available: plasmoidItem.status.rightAvailable,
                                 level: plasmoidItem.status.rightBattery,
                                 charging: plasmoidItem.status.rightCharging
                             },
                             {
                                 label: i18n("Case"),
+                                icon: "battery-symbolic",
                                 available: plasmoidItem.status.caseAvailable,
                                 level: plasmoidItem.status.caseBattery,
                                 charging: plasmoidItem.status.caseCharging
                             },
                             {
                                 label: i18n("Headset"),
+                                icon: "audio-headset-symbolic",
                                 available: plasmoidItem.status.headsetAvailable,
                                 level: plasmoidItem.status.headsetBattery,
                                 charging: plasmoidItem.status.headsetCharging
@@ -131,14 +144,24 @@ PlasmaExtras.Representation {
 
                             contentItem: ColumnLayout {
                                 spacing: Kirigami.Units.smallSpacing
+
+                                Kirigami.Icon {
+                                    source: modelData.icon
+                                    implicitWidth: Kirigami.Units.iconSizes.smallMedium
+                                    implicitHeight: Kirigami.Units.iconSizes.smallMedium
+                                    Layout.alignment: Qt.AlignHCenter
+                                }
+
                                 PlasmaComponents3.Label {
                                     text: modelData.label
                                     font.weight: Font.Medium
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
                                 }
                                 PlasmaComponents3.Label {
-                                    text: modelData.charging
-                                        ? i18n("%1% (Charging)", modelData.level)
-                                        : i18n("%1%", modelData.level)
+                                    text: root.batteryDisplay(modelData.level, modelData.charging)
+                                    Layout.fillWidth: true
+                                    horizontalAlignment: Text.AlignHCenter
                                 }
                             }
                         }
@@ -189,13 +212,6 @@ PlasmaExtras.Representation {
                     checked: plasmoidItem.status.hearingAidEnabled
                     enabled: plasmoidItem.status.connected
                     onClicked: plasmoidItem.callBackend("SetHearingAidEnabled", [checked], null, null)
-                }
-
-                PlasmaComponents3.Button {
-                    Layout.alignment: Qt.AlignHCenter
-                    text: i18n("Open Full App")
-                    icon.name: "window-symbolic"
-                    onClicked: plasmoidItem.callBackend("OpenPage", ["app"], null, null)
                 }
 
                 Item {

@@ -71,12 +71,6 @@ PlasmoidItem {
 
     Plasmoid.contextualActions: [
         PlasmaCore.Action {
-            id: openWindowAction
-            text: i18n("Open LibrePods")
-            icon.name: "window-symbolic"
-            onTriggered: root.callBackend("OpenPage", ["app"], null, null)
-        },
-        PlasmaCore.Action {
             id: openSettingsAction
             text: i18n("Open Settings")
             icon.name: "configure-symbolic"
@@ -128,7 +122,7 @@ PlasmoidItem {
             if (message.member !== "StatusChanged" || message.arguments.length === 0) {
                 return
             }
-            root.status = message.arguments[0]
+            root.status = Object.assign({}, root.status, message.arguments[0])
         }
     }
 
@@ -179,7 +173,7 @@ PlasmoidItem {
     function refreshStatus() {
         callBackend("GetStatus", [], function(value) {
             if (value) {
-                status = value
+                status = Object.assign({}, status, value)
             }
         }, function() {
             ensureBackendStarted()
