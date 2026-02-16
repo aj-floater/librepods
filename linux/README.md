@@ -104,6 +104,20 @@ A native Linux application to control your AirPods, with support for:
    Then add the `LibrePods` widget to your panel/system tray.  
    The applet uses the same LibrePods backend via D-Bus (`me.kavishdevar.librepods`) and auto-starts it.
 
+4. Fast update loop for plasmoid development:
+
+   ```bash
+   # from repo root
+   ./linux/dev-update-plasmoid.sh
+   ```
+
+   Useful flags:
+
+   ```bash
+   ./linux/dev-update-plasmoid.sh --no-restart
+   ./linux/dev-update-plasmoid.sh --skip-build
+   ```
+
 ## Troubleshooting
 
 ### Media Controls (Play/Pause/Skip) Not Working

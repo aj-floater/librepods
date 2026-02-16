@@ -114,7 +114,7 @@ PlasmaExtras.Representation {
                 }
             }
 
-            QQC2.StackLayout {
+            StackLayout {
                 id: pageStack
                 currentIndex: root.currentTab
                 Layout.fillWidth: true
