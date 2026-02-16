@@ -24,12 +24,25 @@ PlasmaExtras.Representation {
         return charging ? percent + " (Charging)" : percent
     }
 
+    function noiseControlLabel(mode) {
+        if (mode === 1) {
+            return i18n("ANC")
+        }
+        if (mode === 2) {
+            return i18n("Transparency")
+        }
+        if (mode === 3) {
+            return i18n("Adaptive")
+        }
+        return i18n("Off")
+    }
+
     implicitWidth: Kirigami.Units.gridUnit * 24
-    implicitHeight: Kirigami.Units.gridUnit * 20
+    implicitHeight: Kirigami.Units.gridUnit * 18
     Layout.minimumWidth: Kirigami.Units.gridUnit * 22
     Layout.maximumWidth: Kirigami.Units.gridUnit * 28
     Layout.minimumHeight: Kirigami.Units.gridUnit * 16
-    Layout.maximumHeight: Kirigami.Units.gridUnit * 28
+    Layout.maximumHeight: Kirigami.Units.gridUnit * 24
     focus: true
     collapseMarginsHint: true
 
@@ -174,6 +187,13 @@ PlasmaExtras.Representation {
                     font.weight: Font.DemiBold
                 }
 
+                PlasmaComponents3.Label {
+                    Layout.fillWidth: true
+                    text: i18n("Current: %1", root.noiseControlLabel(plasmoidItem.status.noiseControlMode))
+                    font.weight: Font.Medium
+                    color: Kirigami.Theme.highlightColor
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
@@ -190,7 +210,9 @@ PlasmaExtras.Representation {
                         delegate: PlasmaComponents3.Button {
                             required property var modelData
                             Layout.fillWidth: true
-                            text: modelData.text
+                            text: plasmoidItem.status.noiseControlMode === modelData.value
+                                ? i18n("✓ %1", modelData.text)
+                                : modelData.text
                             checkable: true
                             checked: plasmoidItem.status.noiseControlMode === modelData.value
                             onClicked: plasmoidItem.callBackend("SetNoiseControlMode", [modelData.value], null, null)
@@ -214,9 +236,6 @@ PlasmaExtras.Representation {
                     onClicked: plasmoidItem.callBackend("SetHearingAidEnabled", [checked], null, null)
                 }
 
-                Item {
-                    Layout.preferredHeight: Kirigami.Units.largeSpacing
-                }
             }
         }
     }
@@ -277,9 +296,6 @@ PlasmaExtras.Representation {
                     onClicked: plasmoidItem.callBackend("OpenPage", ["settings"], null, null)
                 }
 
-                Item {
-                    Layout.preferredHeight: Kirigami.Units.largeSpacing
-                }
             }
         }
     }
