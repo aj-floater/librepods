@@ -14,6 +14,7 @@
 #include <QRegularExpression>
 #include <QTranslator>
 #include <QLibraryInfo>
+#include <QDateTime>
 #include <QDir>
 #include <QStandardPaths>
 #include <QCursor>
@@ -66,6 +67,7 @@ public:
         LOG_INFO("Initializing LibrePods");
 
         m_notificationsEnabled = loadNotificationsEnabled();
+        m_systemTrayModeSetting = loadSystemTrayModeSetting();
 
         // Initialize tray icon and connect signals
         if (m_trayEnabled) {
@@ -169,6 +171,7 @@ public:
         return !QGuiApplication::platformName().contains("wayland", Qt::CaseInsensitive);
     }
     bool trayEnabled() const { return m_trayEnabled; }
+    Q_INVOKABLE int systemTrayModeSetting() const { return m_systemTrayModeSetting; }
     DeviceInfo *deviceInfo() const { return m_deviceInfo; }
     QString phoneMacStatus() const { return m_phoneMacStatus; }
     bool hearingAidEnabled() const { return m_deviceInfo->hearingAidEnabled(); }
@@ -282,6 +285,19 @@ public slots:
             onOpenApp();
         }
         return true;
+    }
+
+    void setSystemTrayModeSetting(int mode)
+    {
+        const int normalizedMode = (mode == 1) ? 1 : 0;
+        if (m_systemTrayModeSetting == normalizedMode) {
+            return;
+        }
+
+        m_systemTrayModeSetting = normalizedMode;
+        saveSystemTrayModeSetting(m_systemTrayModeSetting);
+        emit systemTrayModeSettingChanged(m_systemTrayModeSetting);
+        emit StatusChanged(statusMap());
     }
 
     void connectToDevice(const QString &address) {
@@ -515,6 +531,16 @@ public slots:
 
     int loadRetryAttempts() const { return m_settings->value("bluetooth/retryAttempts", 3).toInt(); }
     void saveRetryAttempts(int attempts) { m_settings->setValue("bluetooth/retryAttempts", attempts); }
+
+    int loadSystemTrayModeSetting() const
+    {
+        return m_settings->value("ui/systemTrayMode", 0).toInt() == 1 ? 1 : 0;
+    }
+
+    void saveSystemTrayModeSetting(int mode)
+    {
+        m_settings->setValue("ui/systemTrayMode", mode == 1 ? 1 : 0);
+    }
 
     void onSystemGoingToSleep()
     {
@@ -929,6 +955,74 @@ private slots:
         }
     }
 
+    bool bluetoothctlCooldownActive(const QString &context)
+    {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if ((now - m_lastBluetoothctlInvocationMs) < m_bluetoothctlCooldownMs)
+        {
+            LOG_WARN("Skipping bluetoothctl invocation (" << context << ") due to cooldown");
+            return true;
+        }
+        m_lastBluetoothctlInvocationMs = now;
+        return false;
+    }
+
+    QString runBluetoothctl(const QStringList &args, const QString &context)
+    {
+        if (m_bluetoothctlRunning)
+        {
+            LOG_WARN("Skipping bluetoothctl invocation (" << context << ") because another command is still running");
+            return QString();
+        }
+
+        m_bluetoothctlRunning = true;
+        QProcess process;
+        process.start("bluetoothctl", args);
+
+        if (!process.waitForStarted(1000))
+        {
+            m_bluetoothctlRunning = false;
+            LOG_ERROR("Failed to start bluetoothctl for " << context << ": " << process.errorString());
+            return QString();
+        }
+
+        if (!process.waitForFinished(m_bluetoothctlTimeoutMs))
+        {
+            process.kill();
+            process.waitForFinished(500);
+            m_bluetoothctlRunning = false;
+            LOG_WARN("bluetoothctl timed out for " << context);
+            return QString();
+        }
+
+        const QString output = process.readAllStandardOutput().trimmed();
+        const QString errors = process.readAllStandardError().trimmed();
+        if (!errors.isEmpty())
+        {
+            LOG_WARN("bluetoothctl stderr (" << context << "): " << errors);
+        }
+
+        m_bluetoothctlRunning = false;
+        return output;
+    }
+
+    bool connectToAlreadyConnectedAirPods()
+    {
+        QBluetoothLocalDevice localDevice;
+        const QList<QBluetoothAddress> connectedDevices = localDevice.connectedDevices();
+        for (const QBluetoothAddress &address : connectedDevices)
+        {
+            QBluetoothDeviceInfo device(address, "", 0);
+            LOG_DEBUG("Connected device: " << device.name() << " (" << device.address().toString() << ")");
+            if (isAirPodsDevice(device))
+            {
+                connectToDevice(device);
+                return true;
+            }
+        }
+        return false;
+    }
+
     void handlePhonePacket(const QByteArray &packet) {
         if (packet.startsWith(AirPodsPackets::Phone::NOTIFICATION))
         {
@@ -966,11 +1060,12 @@ private slots:
             if (socket && socket->isOpen()) {
                 socket->close();
                 LOG_INFO("Disconnected from AirPods");
-                QProcess process;
-                process.start("bluetoothctl", QStringList() << "disconnect" << m_deviceInfo->bluetoothAddress());
-                process.waitForFinished();
-                QString output = process.readAllStandardOutput().trimmed();
-                LOG_INFO("Bluetoothctl output: " << output);
+                const QString btAddress = m_deviceInfo->bluetoothAddress();
+                if (!btAddress.isEmpty() && !bluetoothctlCooldownActive("disconnect"))
+                {
+                    const QString output = runBluetoothctl(QStringList() << "disconnect" << btAddress, "disconnect");
+                    LOG_INFO("Bluetoothctl output: " << output);
+                }
                 isConnectedLocally = false;
                 CrossDevice.isAvailable = true;
             }
@@ -1005,6 +1100,13 @@ private slots:
 public:
     void handleMediaStateChange(MediaController::MediaState state) {
         if (state == MediaController::MediaState::Playing) {
+            const qint64 now = QDateTime::currentMSecsSinceEpoch();
+            if ((now - m_lastMediaTakeoverMs) < m_mediaTakeoverCooldownMs)
+            {
+                LOG_INFO("Skipping media takeover; cooldown active");
+                return;
+            }
+            m_lastMediaTakeoverMs = now;
             LOG_INFO("Media started playing, sending disconnect request to Android and taking over audio");
             sendDisconnectRequestToAndroid();
             connectToAirPods(true);
@@ -1036,23 +1138,23 @@ public:
             return;
         }
 
-        if (force) {
-            LOG_INFO("Forcing connection to AirPods");
-            QProcess process;
-            process.start("bluetoothctl", QStringList() << "connect" << m_deviceInfo->bluetoothAddress());
-            process.waitForFinished();
-            QString output = process.readAllStandardOutput().trimmed();
-            LOG_INFO("Bluetoothctl output: " << output);
+        if (connectToAlreadyConnectedAirPods()) {
+            return;
         }
-        QBluetoothLocalDevice localDevice;
-        const QList<QBluetoothAddress> connectedDevices = localDevice.connectedDevices();
-        for (const QBluetoothAddress &address : connectedDevices) {
-            QBluetoothDeviceInfo device(address, "", 0);
-            LOG_DEBUG("Connected device: " << device.name() << " (" << device.address().toString() << ")");
-            if (isAirPodsDevice(device)) {
-                connectToDevice(device);
-                return;
+
+        if (force) {
+            const QString btAddress = m_deviceInfo->bluetoothAddress();
+            if (btAddress.isEmpty()) {
+                LOG_WARN("Cannot force Bluetooth connection: AirPods MAC address is empty");
+            } else if (!bluetoothctlCooldownActive("connect")) {
+                LOG_INFO("Forcing connection to AirPods");
+                const QString output = runBluetoothctl(QStringList() << "connect" << btAddress, "connect");
+                LOG_INFO("Bluetoothctl output: " << output);
             }
+        }
+
+        if (connectToAlreadyConnectedAirPods()) {
+            return;
         }
         LOG_WARN("AirPods not found among connected devices");
     }
@@ -1084,6 +1186,7 @@ signals:
     void crossDeviceEnabledChanged(bool enabled);
     void notificationsEnabledChanged(bool enabled);
     void retryAttemptsChanged(int attempts);
+    void systemTrayModeSettingChanged(int mode);
     void oneBudANCModeChanged(bool enabled);
     void phoneMacStatusChanged();
     void hearingAidEnabledChanged(bool enabled);
@@ -1108,6 +1211,7 @@ private:
             {"crossDeviceEnabled", CrossDevice.isEnabled},
             {"notificationsEnabled", notificationsEnabled()},
             {"retryAttempts", retryAttempts()},
+            {"systemTrayMode", m_systemTrayModeSetting},
             {"phoneMacStatus", m_phoneMacStatus},
             {"leftBattery", hasBattery ? static_cast<int>(battery->getLeftPodLevel()) : 0},
             {"rightBattery", hasBattery ? static_cast<int>(battery->getRightPodLevel()) : 0},
@@ -1189,11 +1293,18 @@ private:
     bool m_hideOnStart = false;
     bool m_panelMode = false;
     bool m_trayEnabled = true;
+    int m_systemTrayModeSetting = 0;
     bool m_notificationsEnabled = true;
     DeviceInfo *m_deviceInfo;
     BleManager *m_bleManager;
     SystemSleepMonitor *m_systemSleepMonitor = nullptr;
     QString m_phoneMacStatus;
+    qint64 m_lastBluetoothctlInvocationMs = 0;
+    qint64 m_lastMediaTakeoverMs = 0;
+    bool m_bluetoothctlRunning = false;
+    int m_bluetoothctlTimeoutMs = 3000;
+    int m_bluetoothctlCooldownMs = 8000;
+    int m_mediaTakeoverCooldownMs = 6000;
 };
 
 int main(int argc, char *argv[]) {
@@ -1240,10 +1351,15 @@ int main(int argc, char *argv[]) {
     app.setDesktopFileName("me.kavishdevar.librepods");
     app.setQuitOnLastWindowClosed(false);
 
+    const int savedSystemTrayMode = []() {
+        QSettings settings("AirPodsTrayApp", "AirPodsTrayApp");
+        return settings.value("ui/systemTrayMode", 0).toInt() == 1 ? 1 : 0;
+    }();
+
     bool debugMode = false;
     bool hideOnStart = false;
     bool panelMode = false;
-    bool trayEnabled = true;
+    bool trayEnabled = (savedSystemTrayMode == 0);
     bool dbusServiceMode = false;
     for (int i = 1; i < argc; ++i) {
         if (QString(argv[i]) == "--debug")
@@ -1252,8 +1368,10 @@ int main(int argc, char *argv[]) {
         if (QString(argv[i]) == "--hide")
             hideOnStart = true;
 
-        if (QString(argv[i]) == "--panel")
+        if (QString(argv[i]) == "--panel") {
             panelMode = true;
+            trayEnabled = true;
+        }
 
         if (QString(argv[i]) == "--no-tray")
             trayEnabled = false;
